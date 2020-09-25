@@ -1,0 +1,464 @@
+---
+title: "Doc"
+output: html_document
+---
+
+#Load needed library
+```{r setup, include=FALSE, eval=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RSelenium)
+library(rvest)
+library(XML)
+library(xml2)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+require(stringr)
+library(proxy)
+library(purrr)
+```
+
+##Preset the stage: link to website, and code to navigate on it. 
+```{r eval=FALSE}
+mybrowser = rsDriver(port = 5555L) #to start the port
+br = RSelenium::remoteDriver(remoteServerAddr = "localhost",
+                             port = 3333L,
+                        browserName = "chrome")
+
+br$open()
+br = mybrowser$client #gives a shortcut to browser
+appURL = "https://www.amazon.com/s?k=populism&i=stripbooks-intl-ship&rh=p_n_feature_browse-bin%3A2656022011&s=date-desc-rank&dc&qid=1572344150&rnid=618072011&ref=sr_st_date-desc-rank" #settle the website you need to parse
+br$navigate(appURL) #proceed to needed website
+
+```
+
+##If password needed 
+```{r eval=FALSE}
+#br$findElement(using = "name", value = "user")$sendKeysToElement(list("USER NAME"))
+#br$findElement("name", "pass")$sendKeysToElement(list("PASSWORD"))
+#br$findElement("css", "input[type='submit']")$clickElement()
+```
+
+```{r eval=FALSE}
+br$findElement("css", "#search > div.sg-row > div.sg-col-20-of-24.sg-col-28-of-32.sg-col-16-of-20.sg-col.s-right-column.sg-col-32-of-36.sg-col-8-of-12.sg-col-12-of-16.sg-col-24-of-28 > div > span:nth-child(9) > div > span > div > div > ul > li.a-last > a")$clickElement() #NEXT_button
+br$findElement("xpath", "/html/body/div[1]/div[1]/div[1]/div[2]/div/span[3]/div[1]/div[1]/div/span/div/div/div[2]/div[2]/div/div[1]/div/div/div/h2/a")$clickElement() #to the book page
+a = br$findElement("xpath", "/html/body/div[2]/div[1]/div[4]/div[23]/table/tbody/tr/td/div")$getElementText() #to the book page
+b = br$findElement("xpath", "/html/body/div[2]/div[1]/div[4]/div[23]/table/tbody/tr/td/div/ul/li[2]")$getElementText() #to the book page
+c = br$findElement("xpath", "/html/body/div[2]/div[1]/div[4]/div[7]/div[1]/div[1]/h1/span[1]")$getElementText() #title
+d = br$findElement("xpath", "/html/body/div[2]/div[1]/div[4]/div[7]/div[1]/div[1]/h1/span[3]")$getElementText() #date
+d = br$findElement("xpath", "/html/body/div[1]/div[1]/div[1]/div[2]/div/span[3]/div[1]/div[2]/div")$getElementText()[[1]]
+```
+
+#code for face Amazon
+```{r eval=FALSE}
+for (i in 1:25){ 
+  for (j in 1:16){
+  n = paste0("/html/body/div[1]/div[1]/div[1]/div[2]/div/span[3]/div[1]/div[", j, "]/div")
+  all = br$findElement("xpath", n)
+  all1 = all$getElementText()[[1]]
+  temp[j] = all1[[1]]
+  }
+  list = c(list,temp)
+  a[i] = ay
+  br$findElement("css", "#search > div.sg-row > div.sg-col-20-of-24.sg-col-28-of-32.sg-col-16-of-20.sg-col.s-right-column.sg-col-32-of-36.sg-col-8-of-12.sg-col-12-of-16.sg-col-24-of-28 > div > span:nth-child(9) > div > span > div > div > ul > li.a-last > a")$clickElement()
+  Sys.sleep(3)
+}
+```
+
+##code how to make a sense of data (NOT NEDED ANYMORE)
+```{r eval=FALSE}
+str_split_fixed(ex, "\n", n = 10)
+colnames(ex1) = c('title', 'author', 'lol', 'type', 'price', 'other')
+ex1 = as.data.frame(ex1)
+ex1$author = str_split_fixed(ex1$author, '|', n = 2)
+```
+
+d = br$findElement("xpath", "/html/body/div[2]/div[1]/div[4]/div[22]/table/tbody/tr/td/div/ul")$getElementText()[]
+a = str_split_fixed(d, "\n", n = 15)
+
+##OLD ONE WITHOUT PURRR - DOESN'T WORK WELL
+```{r eval=FALSE}
+for (i in 1:2){ 
+  temp = data.frame()
+  for (j in 1:5){
+  n = paste0("/html/body/div[1]/div[1]/div[1]/div[2]/div/span[3]/div[1]/div[", j, "]/div/span/div/div/div[2]/div[2]/div/div[1]/div/div/div[1]/h2/a")
+  br$findElement("xpath", n)$clickElement()
+  if (tryCatch({
+  br$findElement("xpath","/html/body/div[2]/div/div[4]/div[8]/div[6]/div/div[2]/ul/li[2]/span/span[1]/span/a")$clickElement()
+  #br$findElement("css","#mediaTab_heading_0 > a")$clickElement()
+   Sys.sleep(2)
+  link = br$findElement("css", "#productDetailsTable > tbody > tr > td > div > ul")$getCurrentUrl()[[1]]
+  author = br$findElement("xpath","/html/body/div[2]/div/div[4]/div[8]/div[1]/div[2]/span")$getElementText()[[1]]
+  info = br$findElement("css", "#productDetailsTable > tbody > tr > td > div > ul")$getElementText()[[1]]
+  title = br$findElement("xpath","/html/body/div[2]/div[1]/div[4]/div[7]/div[1]/div[1]/h1/span[1]")$getElementText()[[1]]
+  }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")}))
+  {
+  next
+  }
+  temp1 = data.frame(title, author, info, link)
+  temp = rbind(temp,temp1)
+  tempURL = refs[1]
+  br$navigate(tempURL)
+  Sys.sleep(2)
+  }
+  list = data.frame(list,temp)
+  tempURL = refs[i]
+  br$navigate(tempURL)
+  Sys.sleep(2)
+}
+```
+
+##complicated to exert
+```{r eval=FALSE}
+author = br$findElement("css", "#bylineInfo > span")$getElementText()[[1]]
+  publisher = br$findElement("css", "#productDetailsTable > tbody > tr > td > div > ul > li:nth-child(3)")$getElementText()[[1]]
+  date = br$findElement("css", "#productDetailsTable > tbody > tr > td > div > ul > li:nth-child(4)")$getElementText()[[1]]
+```
+
+#FOR CREATING LINKS PAGE
+```{r eval=FALSE}
+refs = c()
+for(i in 2:38){
+  refs[i] = paste0("https://www.amazon.com/s?k=populism&i=stripbooks-intl-ship&rh=n%3A283155%2Cn%3A3377866011%2Cp_n_feature_nine_browse-bin%3A3291437011%2Cp_n_feature_browse-bin%3A2656020011&s=date-desc-rank&dc&page=", i, "&qid=1572379767&rnid=618072011&ref=sr_pg_", i)
+}
+refs[1] = "https://www.amazon.com/s?k=populism&i=stripbooks-intl-ship&rh=n%3A283155%2Cn%3A3377866011%2Cp_n_feature_nine_browse-bin%3A3291437011%2Cp_n_feature_browse-bin%3A2656020011&s=date-desc-rank&dc&qid=1572378500&rnid=618072011&ref=sr_nr_p_n_feature_browse-bin_2"
+```
+
+##WORKING WITH PURRR 
+First we need to remake our function to skip errors
+hardbook
+```{r eval=FALSE}
+hardbook = function(x,y){
+  x = "xpath"
+  y = "/html/body/div[2]/div/div[4]/div[8]/div[6]/div/div[2]/ul/li[2]/span/span[1]/span/a"
+  br$findElement(x,y)$clickElement()
+}
+hardbook()
+hardbook_new <- possibly(hardbook, otherwise = NA)
+
+hardbook_ebook = function(x,y){
+  x = "css"
+  y = "#mediaTab_heading_1 > a"
+  br$findElement(x,y)$clickElement()
+}
+hardbook_ebook()
+hardbook_ebook_possibly <- possibly(hardbook_ebook, otherwise = NA)
+
+hardbook_audio = function(x,y){
+  x = "xpath"
+  y = "/html/body/div[2]/div[1]/div[3]/div[5]/div/div[1]/div/div/div[2]/div[5]/div/div[2]/ul/li[3]/span/span[1]/span/a"
+  br$findElement(x,y)$clickElement()
+}
+hardbook_audio_possibly <- possibly(hardbook_audio, otherwise = NA)
+```
+
+##author
+```{r eval=FALSE}
+avtor = function(x,y){
+  x = "css"
+  #y = "/html/body/div[2]/div/div[4]/div[8]/div[1]/div[2]/span"
+  y = "#bylineInfo > span"
+br$findElement(x,y)$getElementText()[[1]]
+}
+avtor()
+avtor_new <- possibly(avtor, otherwise = NA)
+```
+
+```{r eval=FALSE}
+titula = function(x,y){
+  x = "css"
+  y = "#ebooksProductTitle"
+br$findElement(x,y)$getElementText()[[1]]
+}
+titula()
+titula_new <- possibly(titula, otherwise = NA)
+```
+
+
+NEW ONE_WORKS PRETTY WELL FOR BOOKS
+```{r eval=FALSE}
+for (i in 28:38){ 
+  temp = data.frame()
+  for (j in 1:16){
+  n = paste0("/html/body/div[1]/div[1]/div[1]/div[2]/div/span[3]/div[1]/div[", j, "]/div/span/div/div/div[2]/div[2]/div/div[1]/div/div/div[1]/h2/a")
+  br$findElement("xpath", n)$clickElement()
+  hardbook_new()
+   Sys.sleep(2)
+  link = br$findElement("css", "#productDetailsTable > tbody > tr > td > div > ul")$getCurrentUrl()[[1]]
+  author = avtor_new()
+  info = br$findElement("css", "#productDetailsTable > tbody > tr > td > div > ul")$getElementText()[[1]]
+  title = titula_new()
+  temp1 = data.frame(title, author, info, link)
+  temp = rbind(temp,temp1)
+  tempURL = refs[i]
+  br$navigate(tempURL)
+  Sys.sleep(2)
+  }
+  list = rbind(list,temp)
+  tempURL = refs[i]
+  br$navigate(tempURL)
+  Sys.sleep(3)
+}
+```
+
+
+NOW WE WORK WITH DATA, CLEANING
+TAKE YOUR DATA AND APPLY
+```{r eval=FALSE}
+amazon$title2  = gsub('.*.com/(.*)/dp/.*','\\1', amazon$link)
+amazon$Publisher = gsub('.*\nPublisher: (.*)\nLanguage.*', '\\1', amazon$info)
+amazon$ISBN10 = gsub('.*\nISBN-10: (.*)\nISBN-13.*', '\\1', amazon$info)
+amazon$ISBN13 = gsub('.*\nISBN-13: (.*)\n[S].*', '\\1', amazon$info) #get rid of Product...
+amazon$ISBN13 = gsub('.*\nISBN-13: (.*)\n[P].*', '\\1', amazon$info) #get rid of Shipping...
+amazon$ASIN = gsub('.*\nASIN: (.*)\nWould.*', '\\1', amazon$info) #ASIN number
+amazon$date = gsub('.*,(.*).*', "\\1", amazon$Publisher) #date
+amazon$date = gsub("\\D", "", amazon$date) #get rid of everything except years
+```
+
+cleaning Publisher NEED TO THINK OF
+```{r eval=FALSE}
+pub = amazon$Publisher
+pub = sub("[:punct:]", "", pub)
+```
+
+Let see what books are hardcover, or ISBN
+```{r eval=FALSE}
+amazon$hardcover = str_detect(amazon$info, "Hardcover")
+amazon$IfISBNtrue = str_detect(amazon$info, "ISBN")
+amazon$ifISBN13true = str_detect(amazon$ISBN13, "978")
+amazon$ifASINtrue = str_detect(amazon$ASIN, "B0")
+```
+
+lets add titles 
+
+first prepare data factors to characters
+```{r eval=FALSE}
+amazon_title = dplyr::select(amazon, title, link)
+amazon_title$title = as.character(amazon_title$title)
+amazon_title$link = as.character(amazon_title$link)
+```
+
+write loop for taking titles
+```{r eval=FALSE}
+for(i in 1:439){
+  if (is.na(test$title_new[i]) == T){ 
+  URL = test$link[i]
+  br$navigate(URL)
+  new = titula_new()
+  test$title_new[i] = new
+  Sys.sleep(1.5)
+  }
+}
+```
+
+We still get left with other titles and information
+lets build new copy of data and procceed with different link
+
+```{r eval=FALSE}
+amazon$title = as.character(amazon$title)
+amazon$link = as.character(amazon$link)
+for(i in 1:480){
+  if (amazon$IfISBNtrue[i] == F){ 
+  URL = amazon$link[i]
+  br$navigate(URL)
+  hardbook_ebook_possibly()
+  title = titula_new()
+  link = amazon$link[i]
+  info = br$findElement("css", "#productDetailsTable > tbody > tr > td > div > ul")$getElementText()[[1]]
+  author = avtor_new()
+  ISBN10 = gsub('.*\nISBN-10: (.*)\nISBN-13.*', '\\1', info)
+  temp = data.frame(title, author, ISBN10, info, link)
+  ebook_data = rbind(ebook_data, temp)
+  Sys.sleep(2)
+  }
+}
+```
+
+NOW AUDIO BOOKS
+```{r eval=FALSE}
+ebook_data$title = as.character(ebook_data$title)
+ebook_data$link = as.character(ebook_data$link)
+for(i in 110:128){
+  if (ebook_data$ifaudio[i] == T){ 
+  URL = ebook_data$link[i]
+  br$navigate(URL)
+  Sys.sleep(1)
+  hardbook_audio_possibly()
+  title = titula_new()
+  link = ebook_data$link[i]
+  info = br$findElement("css", "#productDetailsTable > tbody > tr > td > div > ul")$getElementText()[[1]]
+  author = avtor_new()
+  ISBN10 = gsub('.*\nISBN-10: (.*)\nISBN-13.*', '\\1', info)
+  temp = data.frame(title, author, ISBN10, info, link)
+  audio_data = rbind(audio_data, temp)
+  Sys.sleep(2)
+  }
+}
+```
+
+group all datas
+```{r eval=FALSE}
+amazon$link = as.character(amazon$link)
+audio_data$link = as.character(audio_data$link)
+audio_data$info = as.character(audio_data$info)
+audio_merged = dplyr::left_join(audio_data, amazon, by = "link")
+audio_merged$Publisher = gsub('.*\nPublisher: (.*)\nLanguage.*', '\\1', audio_merged$info.x)
+```
+
+group ebooks
+get rid of audio within ebooks true ones
+```{r eval=FALSE}
+new_ebook_data = dplyr::filter(ebook_data, ifaudio == F)
+amazon$link = as.character(amazon$link)
+new_ebook_data$link = as.character(new_ebook_data$link)
+new_ebook_data$info = as.character(new_ebook_data$info)
+ebook_merged = dplyr::left_join(new_ebook_data, amazon, by = "link")
+ebook_merged$Publisher = gsub('.*\nPublisher: (.*)\nLanguage.*', '\\1', ebook_merged$info.x)
+ebook_merged = dplyr::select(ebook_merged, -ifaudio)
+```
+
+```{r eval=FALSE}
+outlier_data = rbind(ebook_merged, audio_merged)
+write.csv(outlier_data, "outlier.csv", fileEncoding = "UTF-8")
+```
+
+merging with head data
+
+```{r eval=FALSE}
+outlier_data_new = dplyr::select(outlier_data, title.x, author.x, ISBN10.x, info.x, link, Publisher, date)
+colnames(otlier_data_new) = c("title_new", "author", "ISBN10", "info", "link", "Publisher", "date")
+```
+
+```{r eval=FALSE}
+amazon_check = dplyr::select(amazon, title_new, title2, author, ISBN10, info, link, Publisher, date, IfISBNtrue)
+title_new = amazon_check$title_new
+title2 = amazon_check$title2
+link = amazon_check$link
+check = data.frame()
+check = data.frame(title_new, title2, link)
+check = left_join(outlier_data_new, check, by = "link")
+check = dplyr::select(check, title_new, title2, author.x, ISBN10.x, info.x, link, Publisher, date)
+colnames(check) = c("title_new", "title2", "author", "ISBN10", "info", "link", "Publisher", "date")
+amazon_check = dplyr::filter(amazon_check, IfISBNtrue == T)
+amazon_check = dplyr::select(amazon_check, -IfISBNtrue)
+```
+
+now we just rbind
+
+```{r eval=FALSE}
+amazon_final_data = rbind(amazon_check, check)
+write.csv(amazon_final_data, "amazon_final.csv", fileEncoding = "UTF-8")
+```
+
+lets work with flows
+
+```{r eval=FALSE}
+test = amazon_final_data
+test$ISBN10 = gsub('.*\nPage Numbers Source ISBN: (.*)\nSimultaneous.*', '\\1', test$ISBN10)
+test$ISBN10 = gsub('.*\nPage Numbers Source ISBN: (.*)\nPublisher*', '\\1', test$ISBN10)
+test$date = as.numeric(test$date)
+test = dplyr::filter(test, date >= 2012)
+test2 = dplyr::select(test, -info)
+```
+
+```{r eval=FALSE}
+test$author = as.character(test$author)
+test$info = as.character(test$info)
+test$ISBN10 = as.character(test$ISBN10)
+test
+```
+
+```{r eval=FALSE}
+#get rid of date in publosher
+str = gsub("\\s\\(.*", "", str)
+```
+
+write both
+```{r eval=FALSE}
+write.csv(test, "amazon_final_edited.csv", fileEncoding = "UTF-8")
+WriteXLS(test2, "amazon_final_edited.xls", perl = "perl", Encoding = "UTF-8", row.names = T, na = "NA")
+```
+
+DOCKER
+```{r eval=FALSE}
+#docker pull selenium/standalone-chrome
+#docker run -d -p 4445:4444 selenium/standalone-chrome
+#docker stop "container"
+#docker ps
+br = RSelenium::remoteDriver(remoteServerAddr = "localhost",
+                             port = 4445L,
+                        browserName = "chrome")
+br$open()
+br$screenshot(display = TRUE) #screenshot
+sc = function(x){br$screenshot(display = TRUE)}
+```
+
+
+Looking if books in the base
+sel for not found: body > div.site > table > tbody > tr.msg > td
+
+```{r eval=FALSE}
+matches = function(x){br$findElement("css", "body > div.site > table > tbody > tr.msg > td")$getElementText()[[1]]}
+matches_possibly = possibly(matches, otherwise = 1)
+
+for (i in 301:439){
+  br$findElement("css", "#otsi")$clearElement()
+  br$findElement("css", "#otsi")$sendKeysToElement(list(amazon_data$ISBN10[i]))
+  br$findElement("css","body > div.site-header > div > div > div.site-search-box.box > div.search-box.box > button")$clickElement()
+  Sys.sleep(1)
+  tartu[i] = matches_possibly()
+  Sys.sleep(0.5)
+}
+
+br$findElement("css", "#otsi")$sendKeysToElement(list(amazon_data$ISBN10[i]))
+```
+
+теперь пару графиков о делах
+начнем с новой даты
+```{r eval=FALSE}
+amazon_full = amazon_data
+amazon_data = dplyr::select(amazon_data, title_new, author, Publisher, date, full_date, ISBN10, Tartu, link)
+```
+
+authors
+```{r eval=FALSE}
+pubs = amazon_data %>% group_by(Publisher) %>% dplyr::summarise(count = n(), percent = n()/439)
+pubs = order(pubs)
+df <-data_frame[order(-data_frame$c3, data_frame$c4),]
+pubs = pubs[order(-pubs$count),]
+ggplot(pubs[1:10,], aes(x =reorder(Publisher, -count), y =count))+
+         geom_bar(stat = "identity", col = "red")+
+  ggtitle("Publishers in data")+
+  xlab("Publisher")+
+  ylab("Number of books")+
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+```
+
+```{r eval=FALSE}
+dat = amazon_data %>% group_by(full_date) %>% dplyr::summarise(count = n())
+ggplot(dat, aes(x=date, count))+
+         geom_bar(stat = "identity", col = "red")+
+  ggtitle("Books per year")+
+  xlab("Year")+
+  ylab("Number of Books")+
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+dat$date = dat$`as.factor(date)`
+
+dat$full_date = as.Date(dat$full_date)
+library(lubridate)
+dat$full_date =as.Date(parse_date_time(dat$full_date,"mmddyyyy"))
+
+ggplot(dat, aes(x=full_date, count))+
+         geom_bar(stat = "identity", col = "red")+
+  ggtitle("Books per year")+
+  xlab("Year")+
+  ylab("Number of Books")+
+  theme(axis.text.x=element_text(angle=45, hjust=1))
+
+```
+
+```{r eval=FALSE}
+write.csv(amazon_data, "amazon_data.csv", fileEncoding = "UTF-8")
+WriteXLS(amazon_data, "amazon_data.xls", perl = "perl", Encoding = "UTF-8", row.names = T, na = "NA")
+```
+
