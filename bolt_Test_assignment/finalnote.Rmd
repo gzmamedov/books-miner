@@ -1,0 +1,460 @@
+---
+title: "Bolt Test Assignment: 1 question"
+author: "Gadir Mamedov"
+output: 
+  html_notebook:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 5
+    number_sections: true
+    theme: lumen
+---
+
+```{r echo=F}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(GGally)
+```
+
+## Introduction
+
+This document attempts to solve the following task.
+
+- Forecast the daily number of agents that will be needed to work on that market to cover the expected volume of tickets for a minimum of 31 days.
+
+## Overview of datasets
+
+**First of all, let us take a look on data in general. We have following variables to work with in "tickets" dataset**:
+
+* Ticket_created_at - exact time showing when the ticket was received
+* Ticket_first_responded_at - exact time when the first response followed (shows reaction of customer support)
+* Ticket_last_solved_at - exact time when the ticket was solved 
+* first_response_time - time (in munutes) of the first reponse (still reaction) 
+* total_resolution_time - time (in minutes) that took to solve a ticket
+* id - just id
+* user_type - type of a user that sent a ticket
+  + business_user
+  + courier
+  + courier_supply
+  + driver
+  + rider
+  + eater
+  + provider
+  + fleet_supply
+  + scooter_rider
+* is_incoming - logical variable showing whether the message is incoming or not (if not, probably, it is sent by customer support)
+
+**"Orders" dataset has following variables:**
+
+* created - exact time of creation of order
+* id - just id
+* completed - yes or not
+* rider_id
+* driver_id 
+* rating
+* ride_distance - in meters
+
+## Tickets dataset 
+
+```{r}
+summary(tickets)
+```
+
+In tickets dataset, timespan is taken from 1 Nov 2019 to 30 Jan 2020; 3 months or 91 days. Although, timespan for tickets resolution starts from the same date (1 Nov) and finishes by 30 Apr 2020. Out of 126431 tickets,  14470 (~11%)  are outgoing, the majority, hence, is incoming. 
+
+The obvious issue that is foreseen concerns the total resolution time. It spans from 0 to 3680 hours. It means that the longest response took around 153 days. Additionaly, around 12000 responses have no data on resolution time. 
+
+**At initial stage, in order to define the workload of customer support service, we should understand how customer support works in general.**
+
+* Usual agents working day lasts 8 hours
+* Any worker is a human that cannot be available all 8 hours: he/she has breaks, needs or an urge to get help or help somebody at work. Besides, workers can get leaves, can be fired. 
+* Workers, as I understand, work with two types of tickets: long and short. Despite the difficulty of the ticket, the first response time cannot be long. However, some tickets can last more than 1 day and require help from other departments and include everyday involvement of a customer support agent that can distract him/her from regular workload. 
+
+**Summing up the abovementioned**, a customer support agent should be available to react (respond) rapidly on incoming tickets, find solution and respond back, waiting to resolve and close ticket. Long tickets can be an issue, but they just require periodical interaction with users to update and possibly resolve long going problem.
+
+**Long tickets** cannot be counted as a part of model since they are very deviant outliers that would not let us correctly predict number of agents. They should be considered separately and solved by introduction of new decisions, such as an individual approach to the content of tickets. 
+
+**A worker's day includes following - this is basically a volume of work:**
+*this should be 8 hours in total**
+
+1. Working with incoming tickets
+ + Working with fast tickets
+ + Working with long tickets
+2. Working with outgoing tickets
+3. Personal needs and other shrinkage reasons.
+
+**Our task is to find an optimal number of agents who could handle an expected amount of tickets per day based on possessed data**
+
+## Methodology 
+
+**Task is to forecast the daily number of agents for at least 31 days.** 
+
+This means that we should know: 
+
+1. Volume of tickets for next month 
+2. Average time that an agent spends on tickets
+
+**The most elegant way to go is to follow the already made path by Danish mathematician Erlang**. Any person can easily find an Erlang calculator on internet that can be helpful in solving a very similar problem of workforce number. The beauty of this method that it easily helps us to find out a number of agents needed to respond tickets; what is more, it helps us to modify a number to better services and decrease "waiting time". 
+
+Anyhow, one of the main drawbacks of Erlang method lies in its approach to reality. As I said, people are not robots, and they can get distracted by personal deeds. The very comfortable and idealised formula of Erlang does not take it into account. But it can be easily solved by calibrating a number of agents up to expected shrinkage. 
+
+Many sources explain and suggest how to do this calculation in the most correct way. I would recommend these two websites:
+
+1. https://www.callcentrehelper.com/erlang-c-formula-example-121281.htm
+ + This will help to understand a logic of Erlang's method and keep all inputs for calucations
+2. https://www.r-bloggers.com/call-centre-workforce-planning-using-erlang-c-in-r-language/
+ + This is a great job done by Peter Prevos who transformed Erlang formula into R language. Besides, he comes up with Erlang Monte Carlo Simulation to make a model more realistic. This is very interesting, but in this task, I'd prefer to stay on the level of Erlang C formula. 
+3. https://www.callcentrehelper.com/erlang-c-calculator-2473.htm 
+  + Here you can download a free Erlang spreadsheet calculator if there is no much desire to work in R.
+
+### Inputs for Erlang method
+
+1. Number of incoming tickets
+
+2. First response time <br>
+*this is enough for calculating traffic intensity* <br>
+This means that the number of agents = (Number of tickets * First Response time (if minutes))/60. This helps us get Erlangs, i.e amount of "call hours". 
+
+Simple example to understand:
+A company gets 100 tickets per hour. An average response time is 5 minutes. It means that a company gets 100*5 = 500 minutes tickets per hour to respond. 500/60 = ~8 hour tickets or 8 erlangs. So, a company needs minimum 8 workers to respond 100 tickets per hour withing 5 minutes. 
+
+3. Erlang C Formula. It helps to calculate a possibility a ticket waits. This probability gives us a way to consider other inputs.<br>
+*Formula adds an effect of queuing because previous formula helps only to get an ideal situation when a ticket comes after each other every 5 minutes.*
+
+```{r echo = F}
+knitr::include_graphics("erlang1.png")
+```
+
+4. Target response time <br>
+It is time that an agent should respond back to ticket
+
+5. Service level <br>
+It is a percentage of tickets that are covered by agents. This is formula for Service level that uses Erlang C value, number of agents, intensity, target asnwering time and average first response time.
+
+```{r echo = F}
+knitr::include_graphics("latex.php.png")
+```
+
+6. Occupancy (refers as to what percentage of working day agents are really busy responding) <br>
+Occupancy = intensity / number of agents
+
+7. Shrinkage (refers to situations like toilet brakes, trainings, seekness).
+
+### This case
+
+Solution to this task can be confined to the search of expected volume of tickets for next month and average first response time. Besides, the final number can be adjusted by shrinkage factor. 
+
+## Outliers, means and medians: some insights and search of inputs. 
+
+### The problem of long and fast tickets can be seen from this set of boxplots. 
+
+```{r}
+ggplot(data = tickets, aes(is_incoming, total_resolution_time))+geom_boxplot(na.rm=T, outlier.color = "red")+theme_minimal()+ggtitle("Figure 1. Boxplot of total resolution time ")
+```
+
+Figure 1 shows some amount of tickets that take more than 500 hours to resolve. However, the median is very low which tells us that these points are more outliers than regular cases. Actually, red color shows outliers. 
+
+*So, how many cases in our dataset are outliers?*
+
+In total,combining incoming and outgoing tickets, there are 14650 outliers that can be found in this dataset. 
+```{r echo=F}
+outstickets = boxplot(tickets$total_resolution_time)
+length(outstickets$out)
+```
+
+```{r}
+ggplot(data = tickets, aes(is_incoming, first_response_time))+geom_boxplot(na.rm=T, outlier.color = "red")+theme_minimal()+ggtitle("Figure 2. Boxplot of First Response Time")
+```
+
+The same situation is observed in first response time boxplot (Figure 2). Although, the median is very low (around 0.6 which is about 36 minutes), the mean number is around 9 hours which can be considered as too long for first reaction to ticket.
+
+There are 16829 messages that are considered as outliers. This is around 13% of dataset. 
+```{r echo=F}
+outsfrt= boxplot(tickets$first_response_time)
+length(outsfrt$out)
+```
+
+**So, what graph we will get, if only cases until 3rd quantile are left?**
+
+```{r echo=F}
+tickets %>% filter(total_resolution_time < 27) %>% ggplot()+
+  geom_histogram(aes(total_resolution_time))+theme_minimal()+ggtitle("Figure 3. Distribution of time spend on resolution of tickets (without outliers)")
+```
+
+```{r}
+tickets %>% filter(first_response_time < 5) %>% ggplot()+
+  geom_histogram(aes(first_response_time))+theme_minimal()+ggtitle("Figure 4. Distribution of first response time (without outliers)")
+```
+
+
+As may be seen from Figure 3 and Figure 4, elimination of outliers still did not help to solve the problem of normal distrubution. The data has a very long tail. This may hinder our calculations, for sure.
+
+There are several ways to curb outliers in dataset. 
+
+- delete them
+- replace with mean or median
+
+We cannot simply delete these observations, as they present some part of workload. But we could replace them with median. It is obvious that mean does not work in not normally distributed data. Again, replacing outliers with median does not solve the issue of a "long tail", but it helps make less extreme and more predictable. 
+
+**In this case, I operate with median as an average First Response Time.**
+
+### Some insights into data
+
+#### 1. How many tickets does customer support get every day? 
+
+```{r echo=F}
+stat_ticket_gen = tickets
+stat_ticket_gen$ticket_created_at = as.Date(stat_ticket_gen$ticket_created_at)
+stat_ticket_gen = stat_ticket_gen %>% group_by(ticket_created_at) %>% dplyr::summarise(number = n())
+mean(stat_ticket_gen$number) #1389
+```
+
+```{r}
+ggplot(stat_ticket_gen, aes(ticket_created_at, number))+geom_bar(stat = "identity")+theme_minimal()+ggtitle("Figure 5. Daily number of all tickets")
+```
+
+On average, each day customer support gets around 1390 tickets. According to data, it rarely exceeds 1700. Visually, the number of tickets is lower by the end of December and in the first days of January.
+
+#### 2. What if to look separately on incoming and outgoing tickets
+```{r echo=F}
+stat_ticket_gen1 = tickets
+stat_ticket_gen1$ticket_created_at = as.Date(stat_ticket_gen1$ticket_created_at)
+stat_ticket_gen1 = stat_ticket_gen1 %>% group_by(ticket_created_at, is_incoming) %>% dplyr::summarise(number = n())
+mean(stat_ticket_gen1$number)
+```
+
+```{r}
+ggplot(stat_ticket_gen1, aes(ticket_created_at, number, fill = is_incoming)) + geom_bar(stat = "identity", position = "dodge")+theme_minimal()+ggtitle("Figure 6. Incoming (true) and Outgoing (false) tickets")
+```
+
+Indeed, outgoing tickets or replies are significanly less in number than incoming ones. But they still take some time from an agent. 
+
+#### 3. Days and hours
+
+What about days, months and work shifts? Thanks to the period when I was applying to customer support position in Bolt, I was instructed about existence of 3 shifts. 
+
+```{r}
+stat_ticket_gen_times = tickets
+stat_ticket_gen_times$timediff = stat_ticket_gen_times$ticket_last_solved_at - stat_ticket_gen_times$ticket_created_at #difference between creation of ticket and last solution
+stat_ticket_gen_times$wdays = wday(stat_ticket_gen_times$ticket_created_at, label = T) #weekdays
+stat_ticket_gen_times$hours = hour(stat_ticket_gen_times$ticket_created_at) #hours
+stat_ticket_gen_times$mday = mday(stat_ticket_gen_times$ticket_created_at) #month days
+stat_ticket_gen_times$month = month(stat_ticket_gen_times$ticket_created_at, label = T) #month
+#for times of day
+# lets create certain breaks
+breaks = hour(hm("00:00", "6:00", "12:00", "18:00", "23:59"))
+shiftbreaks = hour(hm("00:00", "8:00", "15:30", "23:59"))
+# then labels for the breaks
+labels = c("Night", "Morning", "Afternoon", "Evening")
+shifts = c("Night", "Early", "Late")
+#then do the times of day 
+stat_ticket_gen_times$timeday = cut(x=hour(stat_ticket_gen_times$ticket_created_at), breaks = breaks, labels = labels, include.lowest=TRUE)
+#then let's do shifts
+stat_ticket_gen_times$shifts = cut(x=hour(stat_ticket_gen_times$ticket_created_at), breaks = shiftbreaks, labels = shifts, include.lowest=TRUE)
+stat_ticket_gen_times$ticket_created_gen = as.Date(stat_ticket_gen_times$ticket_created_at)
+```
+
+
+```{r echo=T}
+#crosstab wdays and times of day 
+w_time_days = table(stat_ticket_gen_times$wdays, stat_ticket_gen_times$timeday)
+```
+
+```{r}
+heatmap.2(w_time_days, margins = c(10,8), cellnote = w_time_days, notecol="black")
+```
+
+First notion regarding the allocation of customer support agents is that night time requires less people as the number of tickets is significantly lower. The same partially applies to evening time (from 18:00 to 23:59). The bussiest times of day are afternoons and mornings. Heatmap also repeats expected results that the more tickets are expected in the morning of workdays (from Monday to Friday). This is time that should have more agents. 
+
+```{r}
+w_shift_days = table(stat_ticket_gen_times$wdays, stat_ticket_gen_times$shifts)
+heatmap.2(w_shift_days, margins = c(10,8), cellnote = w_shift_days, notecol="black")
+```
+
+This displays the same picture, but applying to working shifts in Bolt company. We assume that time of user and time of agent is the same. As we see, more job is for those agents that get early shifts and late shifts.  
+
+```{r}
+hour_days = table(stat_ticket_gen_times$hours, stat_ticket_gen_times$wdays)
+heatmap.2(hour_days, dendrogram='none', Rowv=FALSE, Colv=FALSE,trace='none', cellnote = hour_days, notecol="black")
+```
+
+This heatmap helps us understand how to allocate agents during a week according to general workload. The redder is area, the less tickets flow is expected. 
+
+#### 4. Distribution of tickets
+
+What is the distribution of tickets across different users?
+
+```{r}
+ggplot(stat_ticket_gen_times)+
+  geom_histogram(aes(ticket_created_gen, fill = user_type), binwidth = 1)+
+  theme_minimal()+ggtitle("Figure 7. Number of tickets across users (days)")+xlab("days")
+```
+
+Figure 7 shows the distribution of tickets across different Bolt users. As it could be expected, most tickets come from drivers and riders. Also, it is clear that number of tickets decreased from the end of December. 
+
+```{r}
+ggplot(stat_ticket_gen_times)+
+  geom_histogram(aes(hours, fill = user_type), binwidth = 1)+
+  theme_minimal()+ggtitle("Figure 8. Number of tickets across users (hours)")
+```
+
+Figure 8 illustrates difference in number of tickets when it comes to hours. As was seen from heatmaps, night hours get less tickets and, hence, require less workforce.
+
+## Further procedure
+
+**From this exploratory analysis, I decided that it is better to forecast number of agents for each shift within a day.** This should give a better picture for how agents could be allocated during next month period. 
+
+**To answer this question, these tasks should be performed:**
+
+1. Change outliers to medians
+2. Find a Ticket growth rate (to know approximate number of tickets for next month)
+3. Adjust next 31 days (based on weekdays) by a ticket growth rate. 
+4. Allocate these tickets according to workload percentage across shifts. 
+5. Apply following formula to get an expected number of agents:
+
+> Raw number of agents = (Number of tickets / working day) * average First Response Time (median) *
+
+> Adj. number of agents = Row number of agents / Shrinkage percentage
+
+
+### Changing outlier to medians
+
+All numbers that higher than 3rd quantile will be changed by median in the First Response Time. Median stays the same after the correction of dataset. 
+
+```{r}
+predata = stat_ticket_gen_times
+frt.3quant = quantile(predata$first_response_time, na.rm = T)[4] #3rd quantile of data
+frt.median = median(predata$first_response_time, na.rm = T)
+predata$first_response_time[predata$first_response_time > frt.3quant] = frt.median 
+```
+
+Median of First Time Response
+```{r}
+median(predata$first_response_time, na.rm = T)
+```
+
+### Find a Ticket Growth Rate
+
+All operations can be illustrated on the table. It shows the statistics on rides per known months, includes explanations on Rides Growth rate, TRP, TPR Growth rate that allow us to predict numbers for next months. 
+
+Now a ticket growth rate for next 31 days can be taken as ~ 0.8. 
+
+```{r echo = F}
+knitr::include_graphics("predicted.png")
+```
+
+
+### Number of tickets
+
+Let's predict number of tickets for weekdays by multiplying mean number of tickets per weekday by ticket growth rate. There is no reason to predict for each day because before we saw a clear pattern across weekdays. Working days are busier in the morning, and etc. 
+
+```{r message = F, echo = F}
+predictdays = stat_ticket_gen_times
+predictdays = predictdays %>% group_by(wdays, mday) %>% dplyr::summarise(number = n())
+predictdays = predictdays %>% group_by(wdays) %>% dplyr::summarise(mean = mean(number))
+#multiplying by ticket growth rate
+predictdays$predicted = predictdays$mean * 0.8
+```
+
+#### Allocation of tickets across shifts
+
+Now we know predicted number of tickets for a week, plus we know median First Response Time. Another thing is to allocate these tickets proportionally across shifts knowing average percentage of workload. Let's make a table with percentages. 
+
+```{r}
+workload = CrossTable(stat_ticket_gen_times$wdays, stat_ticket_gen_times$shifts, chisq = F, fisher = F)
+workload = workload$prop.row
+workload
+```
+
+#### Applying formula
+
+We allocated predicted number of tickets across work shifts. Now we are ready to apply formula. 
+```{r}
+workload = workload * predictdays$predicted
+workload
+```
+
+#### Reminding formula
+
+> First Response Time (median) = 0.62313, let Shrinkage be 20%, it means that occupancy time is 80%
+
+> Raw number of agents = (Number of tickets / working day) * average First Response Time (median) *
+
+> Adj. number of agents = Row number of agents / Shrinkage percentage
+
+#### Calculation
+
+```{r}
+finaltable = (workload/8)* 0.62313
+finaltable = finaltable/0.8
+finaltable
+```
+
+**This is timetable with predicted number of agents per shift counting a shrinkage factor. Of course, it was assumed that average First Response Time is ~ 0.6 hour. Numbers would be much less if average time to respond took around 5 or 10 minutes.This is just a number that shows the minimum number to provide a smooth support**
+
+Let's assume that time to respond takes 0.1 h or 6 minutes
+```{r}
+finaltable_assumed = (workload/8)* 0.1
+finaltable_assumed = finaltable_assumed/0.8
+finaltable_assumed 
+```
+
+**As we see, number of agents is much less**. This, in fact, reflect reality better, I guess. But for this, I need more understanding of customer support work process. Besides, adding up Erlang C formula and etc. could help to bring more realistic numbers. 
+
+#### Allocation across 31 days
+
+Now let's allocate these finding across next 31 days
+
+```{r message = F, echo = F}
+#creating new days
+dataset = c("2020-02-01")
+dataset = as.Date(dataset)
+
+for (i in 2:31){
+  dataset[i] = dataset[i-1] + 1
+}
+```
+
+```{r message = F, echo = F}
+dataset = data.frame(date = dataset, wdays = wday(dataset, label =T))
+final = as.data.frame(finaltable) %>% group_by(x) %>% dplyr::summarise(sum = sum(Freq))
+colnames(final) = c("wdays", "number")
+final_assumed = as.data.frame(finaltable_assumed) %>% group_by(x) %>% dplyr::summarise(sum = sum(Freq))
+colnames(final_assumed) = c("wdays", "number_assumed")
+merged = left_join(dataset, final, by = "wdays")
+```
+
+## Final answer
+
+This is the final result. First number is based on average First Response Time, second Number (assumed) based on premise that First Response Time takes around 6 minutes. 
+```{r}
+merged = left_join(merged, final_assumed, by = "wdays")
+merged
+```
+
+## Discussion 
+
+During this task, I tried to apply simplified version of Erlang Formula that helps us to define number of customer support agents. In fact, according to this formula, intensity equals to minimum number of agents. Intensity supposes that we know average handling time and number of tickets per hour. Unfortunately, I could judge the average handling time on the First Response Time which approximately takes 30 minutes in this dataset. However, reality probably works differently. This issue could be also solved by knowing how many tickets can an agent handle per day or month, for example.
+
+The first problem was outliers. Unfortunately, there is part of dataset that has enormously large numbers for First Response Time and Total Resolution Time. As we see from distribution, they are rarely happening events. Thus, we cannot take them into account during calculations, and they should be handled individually. 
+
+My first attempt was to understand why these outliers exist. It could be nice to have data on **content of tickets**. This could help us to arrange most difficult tickets, automatise solutions to them and instruct customer support agents in future. 
+
+Besides, it is not clear how outgoing and ingoing tickets are connected. Ids of them are irreducible, so I guess they were all independent. But outgoing ticket might be a reaction to the incoming ticket. This can help to trace the whole chain and understand why it takes more time than average. 
+
+Of course, defining number of agents requires knowledge of their workload and off-work routine. I mean that data does not provide any shrinkage, how much time they are actually occupied or not, do they have morning trainings or conferences and etc. Along with information of leaves, breaks, it could be helpful in coming up with better predicted number of agents. 
+
+**Summarising, I would like to know (add) this data:**
+
+- Average Handling Time (in a case if it is different from First Response Time).
+- Substantial cntent of tickets, categorized (This could be done by NLP methods: topic modelling and etc.). Actually, Uber uses COTA method to help customer support. I am not aware of Bolt, but I am sure that there is something similar.
+- Or, at least, information on long tickets: reason, content and etc. 
+- Shrinkage information.
+- Occupancy time. 
+
+
+  
+  
+  
